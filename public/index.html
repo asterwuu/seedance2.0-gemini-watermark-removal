@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seedance Gemini Watermark Removal</title>
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link href="https://api.fontshare.com/v2/css?f[]=clash-grotesk@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Clash Grotesk', system-ui, sans-serif;
+      background: #000; color: #fff;
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 3rem 1.5rem 2rem;
+    }
+
+    .container { width: 100%; max-width: 960px; flex: 1; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(-10px); }
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .header {
+      display: flex; align-items: center; gap: 0.6rem;
+      margin-bottom: 2.5rem; animation: fadeUp 0.4s ease-out both;
+    }
+    .header svg { width: 22px; height: 22px; stroke: #fff; stroke-width: 2; fill: none; }
+    h1 { font-size: 1.4rem; font-weight: 600; letter-spacing: -0.02em; }
+
+    .step { display: none; }
+    .step.active { display: block; animation: fadeUp 0.4s ease-out both; }
+    .step.leaving { display: block; animation: fadeOut 0.3s ease-in forwards; }
+
+    .step-label {
+      font-size: 0.8rem; color: #555; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .step-label svg { width: 14px; height: 14px; stroke: #555; stroke-width: 2; fill: none; }
+
+    .dropzone {
+      border: 2px dashed #333; border-radius: 12px; padding: 3.5rem 2rem;
+      text-align: center; cursor: pointer;
+      transition: border-color 0.25s, background 0.25s;
+    }
+    .dropzone:hover { border-color: #444; background: rgba(255,255,255,0.02); }
+    .dropzone.over { border-color: #fff; background: rgba(255,255,255,0.04); }
+    .dropzone-icon { margin-bottom: 0.75rem; }
+    .dropzone-icon svg {
+      width: 36px; height: 36px; stroke: #444; stroke-width: 1.5; fill: none;
+      transition: stroke 0.25s;
+    }
+    .dropzone:hover .dropzone-icon svg { stroke: #666; }
+    .dropzone p { font-size: 0.95rem; color: #666; }
+    .dropzone .hint { font-size: 0.75rem; color: #333; margin-top: 0.5rem; }
+    .dropzone input { display: none; }
+
+    .editor-hint { font-size: 0.8rem; color: #555; margin-bottom: 0.75rem; }
+
+    .preview-canvas {
+      position: relative; width: 100%;
+      cursor: default; user-select: none; -webkit-user-select: none;
+    }
+    .preview-canvas canvas { display: block; width: 100%; height: auto; border-radius: 8px; }
+
+    .crop-info {
+      display: flex; justify-content: space-between;
+      margin-top: 0.75rem; font-size: 0.8rem; color: #555;
+    }
+
+    /* Templates row (images only) */
+    .templates { margin-top: 0.75rem; display: none; }
+    .templates.active { display: block; }
+    .templates-label { font-size: 0.7rem; color: #444; margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .templates-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .tpl-btn {
+      padding: 0.35rem 0.7rem; border-radius: 6px; border: 1px solid #222;
+      background: transparent; color: #666; font-family: inherit;
+      font-size: 0.75rem; font-weight: 500; cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .tpl-btn:hover { border-color: #444; color: #fff; }
+    .tpl-btn.active { border-color: #fff; color: #fff; }
+
+    .btn {
+      margin-top: 1.25rem; width: 100%; padding: 0.85rem;
+      border: none; border-radius: 8px; background: #fff; color: #000;
+      font-family: inherit; font-size: 0.9rem; font-weight: 600;
+      cursor: pointer; transition: opacity 0.2s, transform 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    }
+    .btn svg { width: 16px; height: 16px; stroke: currentColor; stroke-width: 2; fill: none; }
+    .btn:disabled { opacity: 0.25; cursor: not-allowed; }
+    .btn:hover:not(:disabled) { opacity: 0.85; }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+
+    .btn-ghost {
+      background: transparent; color: #555; border: 1px solid #222; margin-top: 0.6rem;
+    }
+    .btn-ghost:hover:not(:disabled) { color: #fff; border-color: #444; }
+
+    .loading-inline { text-align: center; padding: 3rem 0; }
+    .spinner {
+      width: 28px; height: 28px; border: 2px solid #222; border-top-color: #fff;
+      border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 0.75rem;
+    }
+    .loading-inline p { font-size: 0.85rem; color: #666; }
+
+    .compare {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .compare-col { text-align: center; }
+    .compare-label {
+      font-size: 0.7rem; color: #444; text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: 0.4rem; font-weight: 500;
+    }
+    .compare-col video, .compare-col img {
+      width: 100%; border-radius: 8px; background: #0a0a0a; display: block;
+    }
+
+    .result-actions { text-align: center; margin-top: 0.5rem; }
+
+    .download-btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.8rem 2rem; background: #fff; color: #000;
+      text-decoration: none; border-radius: 8px; font-weight: 600;
+      font-size: 0.9rem; font-family: inherit;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+    .download-btn svg {
+      width: 16px; height: 16px; stroke: #000; stroke-width: 2;
+      fill: none; transition: transform 0.2s;
+    }
+    .download-btn:hover { opacity: 0.85; }
+    .download-btn:hover svg { transform: translateY(2px); }
+    .download-btn:active { transform: scale(0.97); }
+
+    .redo-link {
+      display: inline-block; margin-top: 1rem;
+      font-size: 0.8rem; color: #444; cursor: pointer;
+      transition: color 0.2s; border: none; background: none; font-family: inherit;
+    }
+    .redo-link:hover { color: #fff; }
+
+    .error-box {
+      margin-top: 1rem; padding: 0.75rem; border-radius: 8px;
+      background: #1a0000; border: 1px solid #330000; color: #ff4444;
+      font-size: 0.85rem; text-align: center;
+    }
+
+    .footer {
+      margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #111;
+      display: flex; align-items: center; justify-content: center;
+      gap: 0.75rem; font-size: 0.8rem; color: #444;
+      animation: fadeIn 0.4s ease-out 0.3s both;
+    }
+    .footer a {
+      color: #555; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 0.35rem; transition: color 0.2s;
+    }
+    .footer a:hover { color: #fff; }
+    .footer svg { width: 16px; height: 16px; fill: currentColor; }
+    .footer-sep { color: #222; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="/icon.png" alt="" style="width:22px;height:22px;">
+      <h1>Seedance Gemini Watermark Removal</h1>
+    </div>
+
+    <div class="step active" id="step1">
+      <div class="step-label">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        1 / Drop your file
+      </div>
+      <div class="dropzone" id="dropzone">
+        <div class="dropzone-icon">
+          <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
+        </div>
+        <p>Drop a video or image here</p>
+        <div class="hint">MP4, MOV, AVI, MKV, WEBM, JPG, PNG, WEBP</div>
+        <input type="file" id="fileInput" accept="video/*,image/*">
+      </div>
+    </div>
+
+    <div class="step" id="step2">
+      <div class="step-label">
+        <svg viewBox="0 0 24 24"><path d="M6.13 1 6 16a2 2 0 0 0 2 2h15"/><path d="M1 6.13 16 6a2 2 0 0 1 2 2v15"/></svg>
+        2 / Select area to keep
+      </div>
+      <div class="editor-hint">Drag edges or corners. Everything outside the bright area gets cropped.</div>
+
+      <div class="preview-canvas"><canvas id="canvas"></canvas></div>
+
+      <div class="crop-info">
+        <span id="cropDims"></span>
+        <span id="cropPercent"></span>
+      </div>
+
+      <div class="templates" id="templates">
+        <div class="templates-label">Templates</div>
+        <div class="templates-row">
+          <button class="tpl-btn" data-ratio="1:1">PFP (1:1)</button>
+          <button class="tpl-btn" data-ratio="16:9">Banner (16:9)</button>
+          <button class="tpl-btn" data-ratio="4:3">Thumbnail (4:3)</button>
+          <button class="tpl-btn" data-ratio="9:16">Story (9:16)</button>
+          <button class="tpl-btn" data-ratio="free">Free</button>
+        </div>
+      </div>
+
+      <button class="btn" id="processBtn">
+        <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Process
+      </button>
+      <button class="btn btn-ghost" id="backBtn">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        Back
+      </button>
+    </div>
+
+    <div class="step" id="stepLoading">
+      <div class="loading-inline">
+        <div class="spinner"></div>
+        <p>Processing...</p>
+      </div>
+    </div>
+
+    <div class="step" id="step3">
+      <div class="step-label">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        Done
+      </div>
+      <div class="compare">
+        <div class="compare-col">
+          <div class="compare-label">Original</div>
+          <video id="origVideo" controls muted style="display:none"></video>
+          <img id="origImage" alt="Original" style="display:none">
+        </div>
+        <div class="compare-col">
+          <div class="compare-label">Processed</div>
+          <video id="resultVideo" controls muted style="display:none"></video>
+          <img id="resultImage" alt="Processed" style="display:none">
+        </div>
+      </div>
+      <div class="result-actions">
+        <a class="download-btn" id="downloadLink" href="#">
+          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </a>
+        <br>
+        <button class="redo-link" id="redoBtn">Process another file</button>
+      </div>
+    </div>
+
+    <div id="errorBox" style="display:none"></div>
+  </div>
+
+  <div class="footer">
+    <span>Developed by asterwuu</span>
+    <span class="footer-sep">/</span>
+    <a href="https://github.com/asterwuu" target="_blank" rel="noopener">
+      <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const step1 = $("step1"), step2 = $("step2");
+    const stepLoading = $("stepLoading"), step3 = $("step3");
+    const dropzone = $("dropzone"), fileInput = $("fileInput");
+    const canvas = $("canvas"), ctx = canvas.getContext("2d");
+    const processBtn = $("processBtn"), backBtn = $("backBtn");
+    const redoBtn = $("redoBtn"), errorBox = $("errorBox");
+    const templatesEl = $("templates");
+
+    let uploadData = null, fileType = "video", img = null;
+    let crop = { x: 0, y: 0, w: 0, h: 0 };
+    let dragEdge = null, dragStart = { mx: 0, my: 0, crop: null };
+    const EDGE_T = 14;
+
+    // === Transitions (returns promise so we can await) ===
+    function goTo(from, to) {
+      return new Promise((resolve) => {
+        from.classList.remove("active");
+        from.classList.add("leaving");
+        setTimeout(() => {
+          from.classList.remove("leaving");
+          to.classList.add("active");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          resolve();
+        }, 300);
+      });
+    }
+
+    // === Sound Effects ===
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playTone(freq, dur, type, vol) {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = type || "sine"; o.frequency.value = freq;
+      g.gain.setValueAtTime(vol || 0.15, audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + dur);
+    }
+
+    function sfxDrop() {
+      playTone(880, 0.1, "sine", 0.12);
+      setTimeout(() => playTone(1100, 0.08, "sine", 0.1), 60);
+    }
+    function sfxProcess() { playTone(220, 0.15, "triangle", 0.08); }
+    function sfxSuccess() {
+      playTone(523, 0.12, "sine", 0.15);
+      setTimeout(() => playTone(659, 0.12, "sine", 0.13), 100);
+      setTimeout(() => playTone(784, 0.2, "sine", 0.12), 200);
+    }
+    function sfxDone() {
+      playTone(440, 0.08, "sine", 0.1);
+      setTimeout(() => playTone(660, 0.08, "sine", 0.1), 80);
+      setTimeout(() => playTone(880, 0.15, "sine", 0.12), 160);
+      setTimeout(() => playTone(1100, 0.2, "sine", 0.1), 260);
+    }
+    function sfxDownload() {
+      playTone(500, 0.06, "sine", 0.1);
+      setTimeout(() => playTone(400, 0.06, "sine", 0.08), 50);
+      setTimeout(() => playTone(300, 0.12, "sine", 0.1), 100);
+    }
+    function sfxError() { playTone(200, 0.25, "sawtooth", 0.08); }
+    function sfxClick() { playTone(600, 0.05, "square", 0.06); }
+
+    // === Step 1: Dropzone ===
+    dropzone.addEventListener("click", () => fileInput.click());
+    dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("over"); });
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("over"));
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault(); dropzone.classList.remove("over");
+      if (e.dataTransfer.files.length) pickFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length) pickFile(fileInput.files[0]);
+    });
+
+    async function pickFile(file) {
+      hideError(); sfxDrop();
+      const form = new FormData();
+      form.append("file", file);
+      const origText = dropzone.querySelector("p").textContent;
+      dropzone.querySelector("p").textContent = "Uploading...";
+
+      try {
+        const res = await fetch("/preview", { method: "POST", body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        uploadData = {
+          uploadPath: data.uploadPath, originalName: data.originalName,
+          width: data.width, height: data.height,
+        };
+        fileType = data.type;
+
+        // Show/hide templates
+        templatesEl.classList.toggle("active", fileType === "image");
+
+        img = new Image();
+        img.onload = async () => {
+          // Use browser dimensions (correct for EXIF rotation)
+          uploadData.sourceW = img.naturalWidth;
+          uploadData.sourceH = img.naturalHeight;
+
+          await goTo(step1, step2);
+          requestAnimationFrame(() => {
+            const dW = canvas.parentElement.clientWidth;
+            const ratio = img.naturalHeight / img.naturalWidth;
+            const dH = Math.round(dW * ratio);
+            canvas.width = dW; canvas.height = dH;
+            crop = { x: 0, y: 0, w: dW, h: Math.round(dH * 0.9) };
+            clearActiveTemplate();
+            drawCanvas(); updateInfo();
+          });
+        };
+        img.src = data.thumb;
+      } catch (err) {
+        dropzone.querySelector("p").textContent = origText;
+        sfxError(); showError(err.message);
+      }
+    }
+
+    // === Templates ===
+    document.querySelectorAll(".tpl-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        sfxClick();
+        const r = btn.dataset.ratio;
+        clearActiveTemplate();
+        btn.classList.add("active");
+
+        if (r === "free") {
+          crop = { x: 0, y: 0, w: canvas.width, h: Math.round(canvas.height * 0.9) };
+        } else {
+          const [rw, rh] = r.split(":").map(Number);
+          const targetRatio = rw / rh;
+          const canvasRatio = canvas.width / canvas.height;
+
+          let cw, ch;
+          if (targetRatio > canvasRatio) {
+            cw = canvas.width;
+            ch = Math.round(cw / targetRatio);
+          } else {
+            ch = canvas.height;
+            cw = Math.round(ch * targetRatio);
+          }
+          // Center the crop
+          crop = {
+            x: Math.round((canvas.width - cw) / 2),
+            y: Math.round((canvas.height - ch) / 2),
+            w: cw, h: ch,
+          };
+        }
+
+        drawCanvas(); updateInfo();
+      });
+    });
+
+    function clearActiveTemplate() {
+      document.querySelectorAll(".tpl-btn").forEach((b) => b.classList.remove("active"));
+    }
+
+    // === Canvas crop ===
+    function drawCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 0.3;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1.0;
+      ctx.drawImage(img,
+        (crop.x / canvas.width) * img.naturalWidth,
+        (crop.y / canvas.height) * img.naturalHeight,
+        (crop.w / canvas.width) * img.naturalWidth,
+        (crop.h / canvas.height) * img.naturalHeight,
+        crop.x, crop.y, crop.w, crop.h
+      );
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
+      ctx.strokeRect(crop.x, crop.y, crop.w, crop.h);
+
+      const pts = [
+        crop.x, crop.y, crop.x + crop.w, crop.y,
+        crop.x, crop.y + crop.h, crop.x + crop.w, crop.y + crop.h,
+        crop.x + crop.w / 2, crop.y, crop.x + crop.w / 2, crop.y + crop.h,
+        crop.x, crop.y + crop.h / 2, crop.x + crop.w, crop.y + crop.h / 2,
+      ];
+      ctx.fillStyle = "#fff";
+      for (let i = 0; i < pts.length; i += 2) {
+        ctx.beginPath(); ctx.arc(pts[i], pts[i + 1], 5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    function updateInfo() {
+      const sw = uploadData.sourceW || uploadData.width;
+      const sh = uploadData.sourceH || uploadData.height;
+      const sx = sw / canvas.width, sy = sh / canvas.height;
+      $("cropDims").textContent = Math.round(crop.w * sx) + " x " + Math.round(crop.h * sy) + "px";
+      $("cropPercent").textContent = Math.round((crop.w * crop.h) / (canvas.width * canvas.height) * 100) + "% kept";
+    }
+
+    // Drag
+    function getCanvasPos(e) {
+      const r = canvas.getBoundingClientRect();
+      const sx = canvas.width / r.width, sy = canvas.height / r.height;
+      const cx = e.touches ? e.touches[0].clientX : e.clientX;
+      const cy = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: (cx - r.left) * sx, y: (cy - r.top) * sy };
+    }
+
+    function detectEdge(mx, my) {
+      const t = EDGE_T, c = crop;
+      const nL = Math.abs(mx - c.x) < t && my > c.y - t && my < c.y + c.h + t;
+      const nR = Math.abs(mx - (c.x + c.w)) < t && my > c.y - t && my < c.y + c.h + t;
+      const nT = Math.abs(my - c.y) < t && mx > c.x - t && mx < c.x + c.w + t;
+      const nB = Math.abs(my - (c.y + c.h)) < t && mx > c.x - t && mx < c.x + c.w + t;
+      if (nT && nL) return "tl"; if (nT && nR) return "tr";
+      if (nB && nL) return "bl"; if (nB && nR) return "br";
+      if (nT) return "top"; if (nB) return "bottom";
+      if (nL) return "left"; if (nR) return "right";
+      if (mx > c.x && mx < c.x + c.w && my > c.y && my < c.y + c.h) return "move";
+      return null;
+    }
+
+    const cursorMap = {
+      tl:"nw-resize",tr:"ne-resize",bl:"sw-resize",br:"se-resize",
+      top:"n-resize",bottom:"s-resize",left:"w-resize",right:"e-resize",move:"move"
+    };
+
+    canvas.addEventListener("mousemove", (e) => {
+      if (dragEdge) return;
+      canvas.style.cursor = cursorMap[detectEdge(getCanvasPos(e).x, getCanvasPos(e).y)] || "default";
+    });
+    canvas.addEventListener("mousedown", onDown);
+    canvas.addEventListener("touchstart", onDown, { passive: false });
+
+    function onDown(e) {
+      e.preventDefault();
+      const p = getCanvasPos(e), edge = detectEdge(p.x, p.y);
+      if (!edge) return;
+      dragEdge = edge;
+      dragStart = { mx: p.x, my: p.y, crop: { ...crop } };
+      clearActiveTemplate();
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      document.addEventListener("touchmove", onMove, { passive: false });
+      document.addEventListener("touchend", onUp);
+    }
+
+    function onMove(e) {
+      if (!dragEdge) return;
+      e.preventDefault();
+      const p = getCanvasPos(e);
+      const dx = p.x - dragStart.mx, dy = p.y - dragStart.my;
+      const s = dragStart.crop, MIN = 30;
+      if (dragEdge === "move") {
+        crop.x = clamp(s.x + dx, 0, canvas.width - s.w);
+        crop.y = clamp(s.y + dy, 0, canvas.height - s.h);
+      } else {
+        if (dragEdge.includes("l") || dragEdge === "left") {
+          const nx = clamp(s.x + dx, 0, s.x + s.w - MIN);
+          crop.w = s.w + (s.x - nx); crop.x = nx;
+        }
+        if (dragEdge.includes("r") || dragEdge === "right") crop.w = clamp(s.w + dx, MIN, canvas.width - s.x);
+        if (dragEdge.includes("t") || dragEdge === "top") {
+          const ny = clamp(s.y + dy, 0, s.y + s.h - MIN);
+          crop.h = s.h + (s.y - ny); crop.y = ny;
+        }
+        if (dragEdge.includes("b") || dragEdge === "bottom") crop.h = clamp(s.h + dy, MIN, canvas.height - s.y);
+      }
+      drawCanvas(); updateInfo();
+    }
+
+    function onUp() {
+      dragEdge = null;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onUp);
+    }
+
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    // Back
+    backBtn.addEventListener("click", () => {
+      sfxClick();
+      dropzone.querySelector("p").textContent = "Drop a video or image here";
+      goTo(step2, step1);
+      fileInput.value = "";
+    });
+
+    // === Process ===
+    processBtn.addEventListener("click", async () => {
+      if (!uploadData) return;
+      sfxProcess(); hideError();
+
+      // Await the loading transition so it's fully visible
+      await goTo(step2, stepLoading);
+
+      try {
+        const res = await fetch("/process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uploadPath: uploadData.uploadPath,
+            originalName: uploadData.originalName,
+            sourceW: uploadData.sourceW, sourceH: uploadData.sourceH,
+            cropX: crop.x, cropY: crop.y,
+            cropW: crop.w, cropH: crop.h,
+            origW: canvas.width, origH: canvas.height,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        const oVid = $("origVideo"), oImg = $("origImage");
+        const rVid = $("resultVideo"), rImg = $("resultImage");
+        oVid.style.display = "none"; oImg.style.display = "none";
+        rVid.style.display = "none"; rImg.style.display = "none";
+
+        if (data.type === "image") {
+          oImg.src = data.originalUrl; oImg.style.display = "block";
+          rImg.src = data.url; rImg.style.display = "block";
+        } else {
+          oVid.src = data.originalUrl; oVid.style.display = "block";
+          rVid.src = data.url; rVid.style.display = "block";
+        }
+
+        $("downloadLink").href = "/download/" + data.filename;
+
+        await goTo(stepLoading, step3);
+        sfxDone();
+      } catch (err) {
+        sfxError();
+        await goTo(stepLoading, step2);
+        showError(err.message);
+      }
+    });
+
+    // Download sound
+    $("downloadLink").addEventListener("click", () => sfxDownload());
+
+    // Redo
+    redoBtn.addEventListener("click", () => {
+      sfxClick();
+      goTo(step3, step1);
+      dropzone.querySelector("p").textContent = "Drop a video or image here";
+      fileInput.value = ""; uploadData = null; img = null;
+    });
+
+    function showError(msg) {
+      errorBox.className = "error-box"; errorBox.textContent = msg; errorBox.style.display = "block";
+    }
+    function hideError() { errorBox.style.display = "none"; }
+  </script>
+</body>
+</html>
