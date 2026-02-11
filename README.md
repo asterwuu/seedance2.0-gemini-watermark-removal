@@ -25,7 +25,7 @@ A lightweight, self-hosted tool for removing watermarks from **Seedance AI-gener
 
 ### Video Demo
 
-https://github.com/user-attachments/assets/video.mp4
+[https://github.com/user-attachments/assets/video.mp4](https://x.com/asterwuu/status/2021730418400395412?s=20)
 
 <video src="video.mp4" width="600" controls></video>
 
