@@ -134,6 +134,7 @@ seedance2.0-gemini-watermark-removal/
 ## Credits
 
 Developed by [asterwuu](https://github.com/asterwuu)
+My X: [asterwuu]((https://x.com/asterwuu))
 
 ## License
 
